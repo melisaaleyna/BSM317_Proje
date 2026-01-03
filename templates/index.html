@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>BSM307 Cyber Dashboard</title>
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=Orbitron:wght@500;900&display=swap" rel="stylesheet">
+    
+    <style>
+        /* --- CYBERPUNK THEME --- */
+        :root {
+            --bg-gradient: radial-gradient(circle at center, #0a192f 0%, #020c1b 100%);
+            --glass-bg: rgba(10, 25, 47, 0.9);
+            --neon-blue: #00f3ff;
+            --neon-pink: #bc13fe;
+            --neon-green: #0aff68;
+            --text-main: #ccd6f6;
+        }
+
+        body { 
+            margin: 0; background: var(--bg-gradient); color: var(--text-main); 
+            font-family: 'Rajdhani', sans-serif; display: flex; height: 100vh; overflow: hidden; 
+        }
+        
+        #sidebar {
+            width: 360px; /* Biraz genişlettik */
+            background: var(--glass-bg);
+            border-right: 1px solid var(--neon-blue);
+            box-shadow: 5px 0 30px rgba(0,0,0,0.5);
+            display: flex; flex-direction: column; padding: 20px; 
+            backdrop-filter: blur(10px); z-index: 10;
+            overflow-y: auto; /* Dikeyde sığmazsa kaydır */
+        }
+
+        h1 { 
+            font-family: 'Orbitron', sans-serif; font-size: 22px; color: var(--neon-blue); 
+            text-align: center; margin-bottom: 20px; text-shadow: 0 0 10px var(--neon-blue);
+            border-bottom: 1px solid rgba(0, 243, 255, 0.3); padding-bottom: 10px;
+        }
+        
+        .control-group { margin-bottom: 15px; }
+        
+        label { 
+            font-size: 13px; color: var(--neon-blue); margin-bottom: 5px; 
+            display: block; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; 
+        }
+        
+        select, input {
+            width: 100%; padding: 10px; background: rgba(2, 12, 27, 0.7); 
+            border: 1px solid #1d4ed8; color: #fff; border-radius: 4px; 
+            box-sizing: border-box; font-size: 14px; font-family: 'Rajdhani'; font-weight: bold;
+        }
+        select:focus, input:focus { outline: none; border-color: var(--neon-blue); box-shadow: 0 0 10px rgba(0, 243, 255, 0.2); }
+
+        .row { display: flex; gap: 10px; }
+
+        button {
+            width: 100%; padding: 12px; border: none; border-radius: 4px;
+            font-family: 'Orbitron'; font-weight: bold; cursor: pointer; 
+            text-transform: uppercase; transition: 0.3s; letter-spacing: 1px;
+            background: transparent; border: 1px solid var(--neon-blue); color: var(--neon-blue);
+            margin-top: 5px;
+        }
+        button:hover { background: var(--neon-blue); color: #020c1b; box-shadow: 0 0 20px var(--neon-blue); }
+        button.secondary { border-color: #555; color: #888; font-size: 11px; padding: 8px; }
+        button.secondary:hover { border-color: #fff; color: #fff; background: rgba(255,255,255,0.1); box-shadow: none; }
+
+        /* --- DETAYLI SONUÇ KUTUSU --- */
+        #results {
+            margin-top: 15px; padding: 15px; 
+            background: rgba(0, 10, 20, 0.95); 
+            border-radius: 6px;
+            border: 1px solid var(--neon-green); 
+            display: none;
+            box-shadow: 0 0 15px rgba(10, 255, 104, 0.1);
+            font-size: 13px;
+        }
+        .res-title { color: var(--neon-green); font-family: 'Orbitron'; margin-bottom: 10px; text-align: center; border-bottom: 1px dashed #333; padding-bottom: 5px; }
+        .res-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+        .res-val { font-weight: bold; color: #fff; }
+        
+        /* Terminal Görünümü */
+        .terminal-box {
+            margin-top: 10px;
+            background: #000;
+            border: 1px solid #333;
+            padding: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            color: #ccc;
+            max-height: 150px;
+            overflow-y: auto;
+            word-wrap: break-word;
+        }
+        .term-label { color: #bc13fe; font-weight: bold; }
+
+        #network-container { flex-grow: 1; position: relative; }
+        #network { width: 100%; height: 100%; }
+
+        #loader {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(2, 12, 27, 0.95); color: var(--neon-blue); 
+            padding: 30px; border-radius: 10px; border: 1px solid var(--neon-blue);
+            display: none; font-family: 'Orbitron'; letter-spacing: 2px; z-index: 100; text-align: center;
+        }
+        .loader-spinner {
+            border: 4px solid rgba(0,0,0,0); border-top: 4px solid var(--neon-blue);
+            border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto 15px auto;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h1>NEURAL ROUTER</h1>
+        
+        <div class="control-group">
+            <label>Topology Source</label>
+            <select id="sourceType">
+                <option value="random">Random Cluster (250 Nodes)</option>
+                <option value="csv">Load from CSV File</option>
+            </select>
+            <button class="secondary" onclick="initNetwork()">Initialize System</button>
+        </div>
+
+        <div class="control-group">
+            <label>Routing Points</label>
+            <div class="row">
+                <input type="number" id="src" placeholder="Source (S)">
+                <input type="number" id="dst" placeholder="Target (D)">
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Protocol</label>
+            <select id="algo">
+                <option value="ga">Genetic Algorithm (AI)</option>
+                <option value="aco">Ant Colony Opt. (Swarm)</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>Weights (Delay - Rel - BW)</label>
+            <div class="row">
+                <input type="text" id="w1" value="0.33">
+                <input type="text" id="w2" value="0.33">
+                <input type="text" id="w3" value="0.34">
+            </div>
+        </div>
+
+        <button onclick="findPath()">EXECUTE PROTOCOL</button>
+
+        <div id="results">
+            <div class="res-title">SYSTEM DIAGNOSTICS</div>
+            
+            <div class="res-row"><span>Status:</span> <span style="color:#0aff68">OPTIMAL PATH FOUND</span></div>
+            <div class="res-row"><span>Execution Time:</span> <span class="res-val" id="r-time">-</span></div>
+            <div class="res-row"><span>Hops (Adım):</span> <span class="res-val" id="r-steps">-</span></div>
+            
+            <hr style="border: 0; border-top: 1px dashed #333; margin: 8px 0;">
+            
+            <div class="res-row"><span>Total Delay:</span> <span class="res-val" id="r-delay">-</span></div>
+            <div class="res-row"><span>Total Reliability:</span> <span class="res-val" id="r-rel">-</span></div>
+            <div class="res-row"><span>Rel Cost (-log):</span> <span class="res-val" id="r-rel-cost">-</span></div>
+            <div class="res-row"><span>BW Cost (1000/BW):</span> <span class="res-val" id="r-bw-cost">-</span></div>
+            
+            <div class="res-row" style="margin-top:5px; font-size:14px; color:#bc13fe;">
+                <span>TOTAL SCORE:</span> <span class="res-val" id="r-score" style="color:#bc13fe">-</span>
+            </div>
+
+            <div class="terminal-box">
+                <div class="term-label">> PATH SEQUENCE:</div>
+                <div id="r-path-txt" style="margin-bottom:5px;">-</div>
+                
+                <div class="term-label">> BANDWIDTH DETAILS:</div>
+                <div id="r-bw-det">-</div>
+                
+                <div class="term-label" style="margin-top:5px;">> REQUIREMENT:</div>
+                <div id="r-req-bw">-</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="network-container">
+        <div id="network"></div>
+        <div id="loader">
+            <div class="loader-spinner"></div>
+            <div id="loader-text">PROCESSING...</div>
+        </div>
+    </div>
+
+    <script>
+        let network = null;
+        let nodesDS = new vis.DataSet([]);
+        let edgesDS = new vis.DataSet([]);
+
+        const COLORS = {
+            bg: '#0a192f', nodeDefault: '#112240', nodeBorder: '#00f3ff',
+            edgeDefault: 'rgba(100, 255, 218, 0.1)', pathEdge: '#0aff68', 
+            pathNode: '#ffffff', source: '#00f3ff', target: '#bc13fe' 
+        };
+
+        async function initNetwork() {
+            showLoader("GENERATING NEURAL MAP...");
+            const type = document.getElementById('sourceType').value;
+            try {
+                const res = await fetch('/api/generate', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({type})
+                });
+                const data = await res.json();
+                if(data.success) {
+                    drawGraph(data.data.nodes, data.data.edges);
+                    document.getElementById('results').style.display = 'none';
+                } else alert("ERROR: " + data.message);
+            } catch(e) { alert("Server Connection Failed"); }
+            hideLoader();
+        }
+
+        function drawGraph(nodes, edges) {
+            const container = document.getElementById('network');
+            nodesDS.clear(); edgesDS.clear();
+            nodes.forEach(n => {
+                n.color = { background: COLORS.nodeDefault, border: COLORS.nodeBorder, highlight: { background: '#fff', border: '#fff' } };
+                n.font = { color: '#8892b0', size: 10, face: 'Rajdhani' };
+                n.shape = 'dot'; n.size = 8;
+                n.shadow = { enabled: true, color: 'rgba(0, 243, 255, 0.4)', size: 10 };
+            });
+            nodesDS.add(nodes);
+            edges.forEach(e => {
+                e.color = { color: COLORS.edgeDefault, opacity: 1 };
+                e.width = 0.5; e.smooth = false;
+            });
+            edgesDS.add(edges);
+            network = new vis.Network(container, { nodes: nodesDS, edges: edgesDS }, {
+                physics: { enabled: false }, 
+                interaction: { hover: true, tooltipDelay: 100, zoomView: true, dragView: true },
+                nodes: { borderWidth: 2 }
+            });
+            network.on("doubleClick", function(params) {
+                if(params.nodes.length > 0) {
+                    const id = params.nodes[0];
+                    const s = document.getElementById('src');
+                    if(!s.value) s.value = id; else document.getElementById('dst').value = id;
+                }
+            });
+        }
+
+        async function findPath() {
+            const s = document.getElementById('src').value;
+            const d = document.getElementById('dst').value;
+            if(!s || !d) return alert("Enter Source and Target IDs");
+
+            showLoader("CALCULATING OPTIMAL PATH...");
+            const payload = {
+                s, d,
+                w1: document.getElementById('w1').value,
+                w2: document.getElementById('w2').value,
+                w3: document.getElementById('w3').value,
+                algo: document.getElementById('algo').value
+            };
+
+            try {
+                const res = await fetch('/api/solve', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const result = await res.json();
+
+                if(result.success) {
+                    const m = result.metrics;
+                    document.getElementById('results').style.display = 'block';
+                    
+                    // --- DETAYLI BİLGİLERİ DOLDUR ---
+                    document.getElementById('r-time').innerText = m.duration;
+                    document.getElementById('r-steps').innerText = m.steps;
+                    document.getElementById('r-delay').innerText = m.delay;
+                    document.getElementById('r-rel').innerText = m.reliability;
+                    document.getElementById('r-rel-cost').innerText = m.rel_cost_log;
+                    document.getElementById('r-bw-cost').innerText = m.bw_cost_inv;
+                    document.getElementById('r-score').innerText = m.cost;
+                    
+                    // Terminal Kutusu
+                    document.getElementById('r-path-txt').innerText = JSON.stringify(m.path);
+                    document.getElementById('r-bw-det').innerText = m.bw_detail;
+                    document.getElementById('r-req-bw').innerText = m.req_bw;
+
+                    highlightPath(m.path);
+                } else alert(result.message);
+            } catch(e) { alert("Algorithm Error: " + e); }
+            hideLoader();
+        }
+
+        function highlightPath(path) {
+            const allNodes = nodesDS.get();
+            allNodes.forEach(n => {
+                n.color = { background: '#0a192f', border: '#1d4ed8' };
+                n.size = 5; n.font = { color: '#333' }; n.shadow = { enabled: false };
+            });
+            nodesDS.update(allNodes);
+
+            const allEdges = edgesDS.get();
+            allEdges.forEach(e => { e.color = { color: '#112240', opacity: 0.2 }; e.width = 0.5; });
+            edgesDS.update(allEdges);
+
+            const updateNodes = [];
+            path.forEach((id, index) => {
+                let color = COLORS.pathNode; let size = 20; let labelColor = '#fff';
+                if(index === 0) { color = COLORS.source; size = 30; } 
+                else if(index === path.length - 1) { color = COLORS.target; size = 30; }
+                updateNodes.push({ 
+                    id: id, color: { background: color, border: '#fff' }, size: size,
+                    font: { color: labelColor, size: 16, face: 'Orbitron', strokeWidth: 4, strokeColor: '#000' },
+                    shadow: { enabled: true, color: color, size: 20 }
+                });
+            });
+            nodesDS.update(updateNodes);
+
+            const updateEdges = [];
+            for(let i=0; i<path.length-1; i++) {
+                const u = path[i]; const v = path[i+1];
+                const edges = edgesDS.get({ filter: function (item) { return (item.from === u && item.to === v) || (item.from === v && item.to === u); } });
+                if(edges.length > 0) {
+                    edges[0].color = { color: COLORS.pathEdge, opacity: 1 };
+                    edges[0].width = 6;
+                    updateEdges.push(edges[0]);
+                }
+            }
+            edgesDS.update(updateEdges);
+            network.fit({ nodes: path, animation: { duration: 1000, easingFunction: 'easeInOutQuad' } });
+        }
+
+        function showLoader(text) {
+            document.getElementById('loader-text').innerText = text;
+            document.getElementById('loader').style.display = 'block';
+        }
+        function hideLoader() {
+            document.getElementById('loader').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
